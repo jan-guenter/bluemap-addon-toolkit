@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "status": "development-only",
+  "version": "0.2.0-alpha.1",
+  "plugin_id": "io.github.janguenter.bluemap-addon.java-conventions",
+  "distribution": {
+    "kind": "git-submodule-included-build",
+    "path": "gradle",
+    "automation_pin": "consumer-owned exact gitlink"
+  },
+  "compatibility_gate": {
+    "java": 21,
+    "gradle_versions": [
+      "9.4.0",
+      "9.6.1"
+    ]
+  },
+  "derivation": {
+    "method": "independent implementation of behavior common to 46 inspected add-on builds",
+    "observed_on": "2026-08-29",
+    "representatives": [
+      {
+        "repository": "https://github.com/jan-guenter/bluemap-pipez-addon",
+        "commit": "9162b2b4b231131fb2a169eb7aca3d9bcae037e7"
+      },
+      {
+        "repository": "https://github.com/jan-guenter/bluemap-create-addon",
+        "commit": "6e631e21156fff0e00ae8ba23acf4999556316d0"
+      },
+      {
+        "repository": "https://github.com/jan-guenter/bluemap-connectedglass-addon",
+        "commit": "2c340d6f057802222081ad1cb809152415da8fbd"
+      },
+      {
+        "repository": "https://github.com/jan-guenter/bluemap-supplementaries-addon",
+        "commit": "02971fdff2252224952fc26f7ae3309e725813d5"
+      }
+    ]
+  },
+  "excluded_behavior": [
+    "consumer plugin application",
+    "dependencies and repositories",
+    "project coordinates and archive names",
+    "archive compression and empty-directory policy",
+    "debug metadata",
+    "packaging and publication",
+    "gallery and release verification"
+  ]
+}

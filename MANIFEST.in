@@ -6,6 +6,13 @@ include README.md
 include THIRD_PARTY.md
 recursive-include .github/workflows *.yml
 recursive-include docs *.md
+recursive-include gradle *.gradle *.java *.properties *.xml
+prune gradle/.gradle
+prune gradle/build
+prune gradle/fixtures/java-checkstyle/.gradle
+prune gradle/fixtures/java-checkstyle/build
+prune gradle/fixtures/no-core-plugins/.gradle
+prune gradle/fixtures/no-core-plugins/build
 recursive-include provenance *.json
 recursive-include requirements *.txt
 recursive-include tests *.py

@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: MIT
+
+plugins {
+    id 'java-library'
+    id 'checkstyle'
+    id 'maven-publish'
+    id 'io.github.janguenter.bluemap-addon.java-conventions'
+}
+
+group = addon_group
+version = addon_version
+
+base {
+    archivesName = artifact_id
+}
+
+repositories {
+    mavenCentral {
+        name = 'FixtureMavenCentral'
+    }
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+
+publishing {
+    publications {
+        addon(MavenPublication) {
+            from components.java
+            artifactId = artifact_id
+        }
+    }
+}
+
+def fixtureProject = project
+def fixtureBase = base
+def fixtureJava = java
+def fixtureTasks = tasks
+def fixtureCheckstyle = checkstyle
+def fixtureCheckstyleFile = file('config/checkstyle/checkstyle.xml')
+def fixtureRepositories = repositories
+def fixturePublishing = publishing
+def fixtureConfigurations = configurations
+def fixtureFiles = layout
+
+tasks.register('verifyConventions') {
+    dependsOn tasks.named('check')
+    dependsOn tasks.named('jar')
+    dependsOn tasks.named('sourcesJar')
+    dependsOn tasks.named('generatePomFileForAddonPublication')
+    dependsOn tasks.named('generateMetadataFileForAddonPublication')
+
+    doLast {
+        assert fixtureProject.group.toString() == 'io.github.janguenter.fixture'
+        assert fixtureProject.version.toString() == '1.2.3'
+        assert fixtureBase.archivesName.get() == 'fixture-addon'
+        assert fixtureJava.toolchain.languageVersion.get() == JavaLanguageVersion.of(21)
+        assert fixtureTasks.findByName('sourcesJar') != null
+
+        def compile = fixtureTasks.named('compileJava', JavaCompile).get()
+        assert compile.options.encoding == 'UTF-8'
+        assert compile.options.release.get() == 21
+        assert compile.options.compilerArgs.count('-Xlint:all') == 1
+        assert compile.options.compilerArgs.count('-Werror') == 1
+
+        fixtureTasks.withType(AbstractArchiveTask).each { archive ->
+            assert !archive.preserveFileTimestamps
+            assert archive.reproducibleFileOrder
+        }
+
+        def testTask = fixtureTasks.named('test', Test).get()
+        assert testTask.options instanceof org.gradle.api.tasks.testing.junitplatform.JUnitPlatformOptions
+
+        assert fixtureCheckstyle.toolVersion == '10.18.2'
+        assert fixtureCheckstyle.configFile.canonicalFile ==
+                fixtureCheckstyleFile.canonicalFile
+        fixtureTasks.withType(Checkstyle).each { task ->
+            assert task.reports.xml.required.get()
+            assert task.reports.html.required.get()
+        }
+
+        assert fixtureRepositories.collect { it.name } == ['FixtureMavenCentral']
+        assert fixturePublishing.publications.collect { it.name } == ['addon']
+        assert fixturePublishing.repositories.isEmpty()
+        assert fixtureConfigurations.collect { it }.findAll {
+            it.name.startsWith('bluemap') || it.name.startsWith('toolkit')
+        }.isEmpty()
+
+        def declaredDependencies = fixtureConfigurations.collectMany { configuration ->
+            configuration.dependencies.collect { dependency ->
+                "${configuration.name}:${dependency.group}:${dependency.name}:${dependency.version}"
+            }
+        }.toSet()
+        def expectedDependencies = [
+                'checkstyle:com.puppycrawl.tools:checkstyle:10.18.2',
+                'testImplementation:org.junit.jupiter:junit-jupiter:5.11.4',
+                'testRuntimeOnly:org.junit.platform:junit-platform-launcher:1.11.4'
+        ] as Set
+        assert declaredDependencies == expectedDependencies
+
+        def binary = fixtureTasks.named('jar', Jar).get().archiveFile.get().asFile
+        def binaryZip = new java.util.zip.ZipFile(binary)
+        try {
+            def entries = binaryZip.entries()
+                    .findAll { !it.directory }
+                    .collect { it.name }
+                    .toSet()
+            assert entries == [
+                    'META-INF/MANIFEST.MF',
+                    'io/github/janguenter/fixture/Fixture.class'
+            ] as Set
+            assert entries.findAll { it.contains('bluemap/addon/toolkit') }.isEmpty()
+        } finally {
+            binaryZip.close()
+        }
+
+        def pom = fixtureFiles.projectDirectory
+                .file('build/publications/addon/pom-default.xml')
+                .asFile.getText('UTF-8')
+        def module = fixtureFiles.projectDirectory
+                .file('build/publications/addon/module.json')
+                .asFile.getText('UTF-8')
+        assert pom.contains('<groupId>io.github.janguenter.fixture</groupId>')
+        assert pom.contains('<artifactId>fixture-addon</artifactId>')
+        assert pom.contains('<version>1.2.3</version>')
+        assert !pom.contains('<dependencies>')
+        assert !pom.contains('bluemap-addon-toolkit')
+        assert !module.contains('bluemap-addon-toolkit')
+    }
+}

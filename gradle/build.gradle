@@ -1,0 +1,149 @@
+// SPDX-License-Identifier: MIT
+
+plugins {
+    id 'java-gradle-plugin'
+}
+
+group = 'io.github.janguenter.bluemap'
+
+def versionSource = file('../src/bluemap_addon_toolkit/version.py').getText('UTF-8')
+def versionMatch = versionSource =~ /(?m)^__version__ = "([^"]+)"$/
+if (versionMatch.count != 1) {
+    throw new GradleException('Could not read the unique toolkit version')
+}
+version = versionMatch[0][1]
+
+base {
+    archivesName = 'bluemap-addon-toolkit-gradle'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
+}
+
+gradlePlugin {
+    plugins {
+        javaConventions {
+            id = 'io.github.janguenter.bluemap-addon.java-conventions'
+            implementationClass = 'io.github.janguenter.bluemap.addon.toolkit.gradle.BlueMapAddonJavaConventionsPlugin'
+            displayName = 'BlueMap add-on Java conventions'
+            description = 'Shared build-only Java conventions for independent BlueMap add-ons.'
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+tasks.named('validatePlugins') {
+    enableStricterValidation = true
+    failOnWarning = true
+}
+
+tasks.named('jar', Jar).configure {
+    includeEmptyDirs = false
+    from('../LICENSE') {
+        into 'META-INF'
+        rename { 'LICENSE-bluemap-addon-toolkit' }
+    }
+    from('../NOTICE.md') {
+        into 'META-INF'
+        rename { 'NOTICE-bluemap-addon-toolkit.md' }
+    }
+    from('../THIRD_PARTY.md') {
+        into 'META-INF'
+        rename { 'THIRD_PARTY-bluemap-addon-toolkit.md' }
+    }
+    from('../provenance/gradle-conventions.json') {
+        into 'META-INF/bluemap-addon-toolkit'
+    }
+}
+
+def pluginJar = tasks.named('jar', Jar).flatMap { it.archiveFile }
+def pluginSourcesJar = tasks.named('sourcesJar', Jar).flatMap { it.archiveFile }
+
+tasks.named('sourcesJar', Jar).configure {
+    includeEmptyDirs = false
+    from('../LICENSE') {
+        into 'META-INF'
+        rename { 'LICENSE-bluemap-addon-toolkit' }
+    }
+    from('../NOTICE.md') {
+        into 'META-INF'
+        rename { 'NOTICE-bluemap-addon-toolkit.md' }
+    }
+    from('../THIRD_PARTY.md') {
+        into 'META-INF'
+        rename { 'THIRD_PARTY-bluemap-addon-toolkit.md' }
+    }
+    from('../provenance/gradle-conventions.json') {
+        into 'META-INF/bluemap-addon-toolkit'
+    }
+}
+
+tasks.register('auditPluginJars') {
+    dependsOn tasks.named('jar')
+    dependsOn tasks.named('sourcesJar')
+    inputs.files(pluginJar, pluginSourcesJar)
+    doLast {
+        def descriptor = (
+                'META-INF/gradle-plugins/'
+                        + 'io.github.janguenter.bluemap-addon.java-conventions.properties'
+        )
+        def implementationBase = (
+                'io/github/janguenter/bluemap/addon/toolkit/gradle/'
+                        + 'BlueMapAddonJavaConventionsPlugin'
+        )
+        def metadata = [
+                'META-INF/MANIFEST.MF',
+                'META-INF/LICENSE-bluemap-addon-toolkit',
+                'META-INF/NOTICE-bluemap-addon-toolkit.md',
+                'META-INF/THIRD_PARTY-bluemap-addon-toolkit.md',
+                'META-INF/bluemap-addon-toolkit/gradle-conventions.json'
+        ] as Set
+        def expectedByFile = [
+                (pluginJar.get().asFile): metadata + [descriptor, "${implementationBase}.class"],
+                (pluginSourcesJar.get().asFile): metadata + ["${implementationBase}.java"]
+        ]
+
+        expectedByFile.each { candidate, expected ->
+            def zip = new java.util.zip.ZipFile(candidate)
+            try {
+                def entries = zip.entries().findAll { !it.directory }.collect { it.name }
+                def uniqueEntries = entries.toSet()
+                if (uniqueEntries.size() != entries.size() || uniqueEntries != expected) {
+                    throw new GradleException(
+                            "Unexpected ${candidate.name} entries: ${uniqueEntries}"
+                    )
+                }
+                if (candidate == pluginJar.get().asFile) {
+                    def descriptorText = zip.getInputStream(zip.getEntry(descriptor))
+                            .getText('UTF-8').trim()
+                    def expectedDescriptor = (
+                            'implementation-class='
+                                    + 'io.github.janguenter.bluemap.addon.toolkit.gradle.'
+                                    + 'BlueMapAddonJavaConventionsPlugin'
+                    )
+                    if (descriptorText != expectedDescriptor) {
+                        throw new GradleException('Gradle plugin descriptor mismatch')
+                    }
+                }
+            } finally {
+                zip.close()
+            }
+        }
+    }
+}
+
+tasks.named('check').configure {
+    dependsOn tasks.named('auditPluginJars')
+}

@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: MIT
+
+pluginManagement {
+    includeBuild('../..')
+}
+
+rootProject.name = 'no-core-plugins-fixture'
