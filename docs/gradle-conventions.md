@@ -22,6 +22,20 @@ task. `withSourcesJar()` intentionally exposes the ordinary Java sources
 variant, and Checkstyle's selected tool version intentionally resolves the
 consumer's existing Checkstyle tooling dependency.
 
+## Repository contract checker
+
+Toolkit `0.3.0-alpha.1` resolves the `0.2.0-alpha.1` checker limitation that
+required the convention-owned settings to remain inline in `build.gradle`.
+`bluemap-addon-toolkit conventions check` now accepts the exact applied plugin
+declaration in the leading `plugins` block as the provider of Java 21,
+compiler, Checkstyle, and reproducible-archive settings.
+
+The checker still requires the consumer to apply `java-library`, `checkstyle`,
+and `maven-publish`. A comment, a different plugin ID, a declaration outside
+the leading `plugins` block, or `apply false` does not qualify. This remains a
+repository-shape check. The consumer-owned `settings.gradle` preflight and the
+Gradle build verify the exact plugin source and its effective behavior.
+
 ## Consumer loading
 
 The consumer keeps the toolkit at `tooling/bluemap-addon-toolkit`. The

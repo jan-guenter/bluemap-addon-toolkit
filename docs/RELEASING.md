@@ -21,5 +21,5 @@ release evidence. Release from a clean reviewed commit.
 Consumers pin the full release commit and the exact wheel SHA-256. No toolkit
 release updates a Minecraft server.
 
-The human version `0.2.0-alpha.1` is normalized to the PEP 440 distribution
-version `0.2.0a1` in wheel and source-archive filenames.
+The human version `0.3.0-alpha.1` is normalized to the PEP 440 distribution
+version `0.3.0a1` in wheel and source-archive filenames.

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -12,12 +15,43 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from bluemap_addon_toolkit import contract, migration  # noqa: E402
+from bluemap_addon_toolkit import cli, contract, migration  # noqa: E402
 from fixture_factory import init_git  # noqa: E402
 
 
 class ConventionTest(unittest.TestCase):
-    def write_minimal_repository(self, repository: Path) -> None:
+    INLINE_BUILD = """plugins {
+    id 'java-library'
+    id 'checkstyle'
+    id 'maven-publish'
+}
+java { toolchain.languageVersion = JavaLanguageVersion.of(21) }
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+    options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
+}
+checkstyle { toolVersion = '10.18.2' }
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+"""
+
+    SHARED_PLUGIN_BUILD = """plugins {
+    id 'java-library'
+    id 'checkstyle'
+    id 'maven-publish'
+    id 'io.github.janguenter.bluemap-addon.java-conventions'
+}
+"""
+
+    def write_minimal_repository(
+        self,
+        repository: Path,
+        *,
+        build: str | None = None,
+    ) -> None:
         required_plain = set(contract.REQUIRED_PATHS) - {
             ".editorconfig",
             ".gitattributes",
@@ -36,23 +70,7 @@ class ConventionTest(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(contract.standard_bytes(standard))
         (repository / "build.gradle").write_text(
-            """plugins {
-    id 'java-library'
-    id 'checkstyle'
-    id 'maven-publish'
-}
-java { toolchain.languageVersion = JavaLanguageVersion.of(21) }
-tasks.withType(JavaCompile).configureEach {
-    options.release = 21
-    options.encoding = 'UTF-8'
-    options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
-}
-checkstyle { toolVersion = '10.18.2' }
-tasks.withType(AbstractArchiveTask).configureEach {
-    preserveFileTimestamps = false
-    reproducibleFileOrder = true
-}
-""",
+            self.INLINE_BUILD if build is None else build,
             encoding="utf-8",
         )
         (repository / "gradle.properties").write_text(
@@ -94,6 +112,147 @@ org.gradle.jvmargs=-Xmx2G
             init_git(repository)
             result = contract.check_repository(repository)
             self.assertTrue(result["ok"], result["findings"])
+
+    def test_applied_shared_convention_fixture_passes(self) -> None:
+        builds = {
+            "single quotes": self.SHARED_PLUGIN_BUILD,
+            "double quotes": self.SHARED_PLUGIN_BUILD.replace(
+                "id 'io.github.janguenter.bluemap-addon.java-conventions'",
+                'id "io.github.janguenter.bluemap-addon.java-conventions"',
+            ),
+            "leading comment": "// consumer build\n" + self.SHARED_PLUGIN_BUILD,
+        }
+        for name, build in builds.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                repository = Path(temporary)
+                self.write_minimal_repository(repository, build=build)
+                init_git(repository)
+                result = contract.check_repository(repository)
+                self.assertTrue(result["ok"], result["findings"])
+
+    def test_only_applied_canonical_shared_convention_satisfies_owned_checks(self) -> None:
+        invalid_builds = {
+            "apply false": self.SHARED_PLUGIN_BUILD.replace(
+                "java-conventions'",
+                "java-conventions' apply false",
+            ),
+            "apply true": self.SHARED_PLUGIN_BUILD.replace(
+                "java-conventions'",
+                "java-conventions' apply true",
+            ),
+            "version suffix": self.SHARED_PLUGIN_BUILD.replace(
+                "java-conventions'",
+                "java-conventions' version '0.3.0-alpha.1'",
+            ),
+            "commented": self.SHARED_PLUGIN_BUILD.replace(
+                "    id 'io.github.janguenter.bluemap-addon.java-conventions'",
+                "    // id 'io.github.janguenter.bluemap-addon.java-conventions'",
+            ),
+            "trailing comment": self.SHARED_PLUGIN_BUILD.replace(
+                "java-conventions'",
+                "java-conventions' // not the canonical declaration",
+            ),
+            "block commented": self.SHARED_PLUGIN_BUILD.replace(
+                "    id 'io.github.janguenter.bluemap-addon.java-conventions'",
+                "    /* id 'io.github.janguenter.bluemap-addon.java-conventions' */",
+            ),
+            "multiline string": self.SHARED_PLUGIN_BUILD.replace(
+                "    id 'io.github.janguenter.bluemap-addon.java-conventions'",
+                "    def ignored = \"\"\"\n"
+                "    id 'io.github.janguenter.bluemap-addon.java-conventions'\n"
+                "    \"\"\"",
+            ),
+            "misspelled": self.SHARED_PLUGIN_BUILD.replace(
+                "java-conventions'",
+                "java-convention'",
+            ),
+            "wrong case": self.SHARED_PLUGIN_BUILD.replace(
+                "bluemap-addon.java-conventions'",
+                "bluemap-addon.Java-conventions'",
+            ),
+            "prefix": self.SHARED_PLUGIN_BUILD.replace(
+                "io.github.janguenter",
+                "invalid.io.github.janguenter",
+            ),
+            "suffix": self.SHARED_PLUGIN_BUILD.replace(
+                "java-conventions'",
+                "java-conventions.invalid'",
+            ),
+            "legacy apply plugin": self.SHARED_PLUGIN_BUILD.replace(
+                "    id 'io.github.janguenter.bluemap-addon.java-conventions'",
+                "    apply plugin: 'io.github.janguenter.bluemap-addon.java-conventions'",
+            ),
+            "parenthesized": self.SHARED_PLUGIN_BUILD.replace(
+                "    id 'io.github.janguenter.bluemap-addon.java-conventions'",
+                "    id('io.github.janguenter.bluemap-addon.java-conventions')",
+            ),
+            "semicolon": self.SHARED_PLUGIN_BUILD.replace(
+                "java-conventions'",
+                "java-conventions';",
+            ),
+            "mismatched quotes": self.SHARED_PLUGIN_BUILD.replace(
+                "id 'io.github.janguenter.bluemap-addon.java-conventions'",
+                "id 'io.github.janguenter.bluemap-addon.java-conventions\"",
+            ),
+            "outside plugin block": self.SHARED_PLUGIN_BUILD.replace(
+                "    id 'io.github.janguenter.bluemap-addon.java-conventions'\n",
+                "",
+            )
+            + "id 'io.github.janguenter.bluemap-addon.java-conventions'\n",
+        }
+        expected = sorted(
+            message for _pattern, message in contract.CONVENTION_OWNED_BUILD_CHECKS
+        )
+        for name, build in invalid_builds.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                repository = Path(temporary)
+                self.write_minimal_repository(repository, build=build)
+                init_git(repository)
+                result = contract.check_repository(repository)
+                actual = [item["message"] for item in result["findings"]]
+                self.assertEqual(expected, actual)
+
+    def test_shared_convention_does_not_replace_consumer_plugins(self) -> None:
+        build = """plugins {
+    id 'io.github.janguenter.bluemap-addon.java-conventions'
+}
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            self.write_minimal_repository(repository, build=build)
+            init_git(repository)
+            result = contract.check_repository(repository)
+            expected = sorted(message for _pattern, message in contract.CONSUMER_BUILD_CHECKS)
+            actual = [item["message"] for item in result["findings"]]
+            self.assertEqual(expected, actual)
+
+    def test_cli_accepts_applied_shared_convention_in_text_and_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            self.write_minimal_repository(repository, build=self.SHARED_PLUGIN_BUILD)
+            init_git(repository)
+            for output_format in ("text", "json"):
+                with self.subTest(output_format=output_format):
+                    arguments = ["conventions", "check", str(repository)]
+                    if output_format == "json":
+                        arguments.append("--json")
+                    stdout = StringIO()
+                    stderr = StringIO()
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        status = cli.main(arguments)
+                    self.assertEqual(0, status)
+                    self.assertEqual("", stderr.getvalue())
+                    if output_format == "json":
+                        result = json.loads(stdout.getvalue())
+                        self.assertEqual(1, len(result))
+                        self.assertTrue(result[0]["ok"])
+                        self.assertEqual([], result[0]["findings"])
+                    else:
+                        self.assertEqual(
+                            f"PASS {repository.resolve()}\n"
+                            "1/1 repositories satisfy addon-v1\n",
+                            stdout.getvalue(),
+                        )
 
     def test_reports_missing_contract_and_unpinned_action(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
