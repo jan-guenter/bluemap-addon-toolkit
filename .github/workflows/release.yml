@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+
+      - name: Verify tag and tests
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          version="$(PYTHONPATH=src python -c \
+            'from bluemap_addon_toolkit import __version__; print(__version__)')"
+          test "${RELEASE_TAG}" = "v${version}"
+          test "$(git tag --points-at HEAD --list "${RELEASE_TAG}")" = "${RELEASE_TAG}"
+          python -m unittest discover -s tests -v
+
+      - name: Build reproducible release archives
+        run: |
+          python -m pip install --disable-pip-version-check \
+            --require-hashes --only-binary=:all: -r requirements/build.txt
+          python tools/build_release.py first
+          python tools/build_release.py second
+          for artifact in first/*; do
+            cmp "${artifact}" "second/$(basename "${artifact}")"
+          done
+          mkdir release
+          cp first/* release/
+          python tools/audit_distribution.py release/*
+          (cd release && sha256sum -- ./* > SHA256SUMS)
+
+      - name: Test the release wheel in a clean environment
+        run: |
+          python -m venv "${RUNNER_TEMP}/install-test"
+          "${RUNNER_TEMP}/install-test/bin/python" -m pip install \
+            --disable-pip-version-check --no-deps release/*.whl
+          test "$("${RUNNER_TEMP}/install-test/bin/bluemap-addon-toolkit" --version)" = \
+            "${GITHUB_REF_NAME#v}"
+          "${RUNNER_TEMP}/install-test/bin/python" -c \
+            "from bluemap_addon_toolkit.contract import standard_bytes; assert standard_bytes('checkstyle.xml').startswith(b'<?xml')"
+
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            test "$(gh release view "${RELEASE_TAG}" \
+              --json isDraft --jq '.isDraft')" = true
+            gh release upload "${RELEASE_TAG}" release/* --clobber
+          else
+            gh release create "${RELEASE_TAG}" release/* \
+              --draft --generate-notes --title "BlueMap Add-on Toolkit ${RELEASE_TAG}" \
+              --verify-tag
+          fi
+
+      - name: Attest release archives
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: release/*
+
+      - name: Verify and publish draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          downloaded="${RUNNER_TEMP}/release-assets"
+          mkdir -p "${downloaded}"
+          gh release download "${RELEASE_TAG}" --dir "${downloaded}"
+          mapfile -t expected < <(
+            for artifact in release/*; do basename "${artifact}"; done | LC_ALL=C sort
+          )
+          mapfile -t actual < <(gh release view "${RELEASE_TAG}" \
+            --json assets --jq '.assets[].name' | LC_ALL=C sort)
+          diff -u \
+            <(printf '%s\n' "${expected[@]}") \
+            <(printf '%s\n' "${actual[@]}")
+          for artifact in release/*; do
+            cmp "${artifact}" "${downloaded}/$(basename "${artifact}")"
+          done
+          if [[ "${RELEASE_TAG}" == *-* ]]; then
+            gh release edit "${RELEASE_TAG}" --draft=false --prerelease
+          else
+            gh release edit "${RELEASE_TAG}" --draft=false --latest
+          fi

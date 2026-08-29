@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bluemap-addon-toolkit"
+dynamic = ["version"]
+description = "Development and release tooling for independent BlueMap add-ons"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "Jan Guenter" },
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = []
+
+[project.scripts]
+bluemap-addon-toolkit = "bluemap_addon_toolkit.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "bluemap_addon_toolkit.version.__version__" }
+
+[tool.setuptools.package-data]
+bluemap_addon_toolkit = ["data/addon-v1/*"]
+
+[tool.setuptools.data-files]
+"share/bluemap-addon-toolkit/provenance" = ["provenance/origins.json"]

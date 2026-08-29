@@ -1,0 +1,41 @@
+# Agent guide for @@ADDON_NAME@@
+
+This is an independent public BlueMap add-on repository in the BlueMap ATMons
+portfolio. Read this file and `README.md` before changing it.
+
+## Exact baseline
+
+- All the Mons `1.2.0`
+- Minecraft `1.21.1`
+- NeoForge `21.1.248`
+- Java `21`
+- BlueMap `@@BLUEMAP_VERSION@@`
+- Add-on ID `@@ADDON_ID@@`, version `@@ADDON_VERSION@@`
+
+This is a standalone BlueMap add-on, not a NeoForge mod. Do not add client
+classes, candidate binaries or assets, nested JARs, Minecraft classes, Mixins,
+or world state.
+
+## Development contract
+
+- Preserve stock rendering when the exact runtime profile is absent,
+  unsupported, malformed, duplicated, or disabled.
+- Keep BlueMap internals isolated below the versioned adapter package.
+- Keep exact candidate identities and resource contracts in the profile.
+- Keep state decoding, normalized data, and mesh emission separate.
+- Use bounded diagnostics and stock fallback for unknown family data.
+- Keep gallery cases, renderer behavior, licensing, and provenance owned by
+  this repository.
+- Follow the shared `addon-v1` source style maintained by `bluemap-atmons`.
+
+## Commands
+
+Run the repository's documented exact-input properties, then:
+
+```bash
+gradle --no-daemon clean check build
+```
+
+Follow `docs/RELEASING.md` and the repository workflow for publication. Never
+stage generated build output, candidate JARs, worlds, credentials, logs, or
+local research evidence.

@@ -1,0 +1,9 @@
+.gradle/
+.idea/
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+gradle-plugin/.gradle/
+gradle-plugin/build/

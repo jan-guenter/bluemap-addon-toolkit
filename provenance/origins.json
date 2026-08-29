@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "source_portfolio": {
+    "repository": "https://github.com/jan-guenter/bluemap-atmons",
+    "commit": "54baa542e1d2aa50b44ae4f854dddac351699b77",
+    "manifest": "versions/1.2.0/manifest.json"
+  },
+  "extractions": [
+    {
+      "component": "artifact verifier",
+      "clone_group": "file-dc7c6d80796f9d57",
+      "source_sha256": "dc7c6d80796f9d5773183a499aa61320a0126ac21f1fdb5c8e872bbf618ca798",
+      "observed_copies": 24,
+      "representative": {
+        "repository": "https://github.com/jan-guenter/bluemap-ars-creo-addon",
+        "commit": "f27921f918928a813d8bf9d0aa607184de41d9e2",
+        "path": "tools/verify_pinned_artifacts.py"
+      }
+    },
+    {
+      "component": "staged JAR entry verifier",
+      "clone_group": "file-cc8fa6cb1e79b855",
+      "source_sha256": "cc8fa6cb1e79b85555b9f10920909b0c03fdc8d78445e07c877674e513fcff9f",
+      "observed_copies": 24,
+      "representative": {
+        "repository": "https://github.com/jan-guenter/bluemap-ars-creo-addon",
+        "commit": "f27921f918928a813d8bf9d0aa607184de41d9e2",
+        "path": "tools/verify_staged_equivalence.py"
+      }
+    },
+    {
+      "component": "addon-v1 repository contract",
+      "source_commit": "2616dee6ce1bd00fe599e7c2a92332f7f24a598e",
+      "paths": [
+        "standards/addon-v1",
+        "tools/check_addon_conventions.py",
+        "tools/migrate_addon_conventions.py"
+      ]
+    }
+  ]
+}
