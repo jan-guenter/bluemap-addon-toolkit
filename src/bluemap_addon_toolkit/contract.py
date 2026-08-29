@@ -14,6 +14,38 @@ from typing import Iterable
 ACTION_USE = re.compile(r"(?m)^\s*(?:-\s*)?uses:\s*([^\s#]+)")
 FULL_COMMIT = re.compile(r"[0-9a-fA-F]{40}")
 PROPERTY = re.compile(r"(?m)^([A-Za-z][A-Za-z0-9_.-]*)\s*=\s*(.*?)\s*$")
+SHARED_JAVA_CONVENTION_ID = "io.github.janguenter.bluemap-addon.java-conventions"
+
+CONSUMER_BUILD_CHECKS = (
+    (r"id\s+['\"]java-library['\"]", "java-library plugin is missing"),
+    (r"id\s+['\"]checkstyle['\"]", "checkstyle plugin is missing"),
+    (r"id\s+['\"]maven-publish['\"]", "maven-publish plugin is missing"),
+)
+
+CONVENTION_OWNED_BUILD_CHECKS = (
+    (r"JavaLanguageVersion\.of\(21\)", "Java 21 toolchain is missing"),
+    (r"options\.release\s*=\s*21", "Java release 21 is missing"),
+    (r"options\.encoding\s*=\s*['\"]UTF-8['\"]", "UTF-8 compilation is missing"),
+    (r"-Xlint:all", "-Xlint:all compilation is missing"),
+    (r"-Werror", "-Werror compilation is missing"),
+    (r"toolVersion\s*=\s*['\"]10\.18\.2['\"]", "Checkstyle 10.18.2 is missing"),
+    (r"preserveFileTimestamps\s*=\s*false", "timestamp-free archives are missing"),
+    (r"reproducibleFileOrder\s*=\s*true", "reproducible archive order is missing"),
+)
+
+_GRADLE_NON_CODE = re.compile(
+    r"(?P<triple>'''|\"\"\").*?(?P=triple)|//[^\r\n]*|/\*.*?\*/",
+    re.DOTALL,
+)
+_LEADING_PLUGIN_BLOCK = re.compile(
+    r"\A\s*plugins\s*\{(?P<body>.*?)^\s*\}\s*",
+    re.DOTALL | re.MULTILINE,
+)
+_APPLIED_SHARED_JAVA_CONVENTION = re.compile(
+    rf"^[ \t]*id[ \t]+(?P<quote>['\"]){re.escape(SHARED_JAVA_CONVENTION_ID)}"
+    r"(?P=quote)[ \t]*$",
+    re.MULTILINE,
+)
 
 REQUIRED_PATHS = (
     ".editorconfig",
@@ -76,6 +108,37 @@ def read(path: Path) -> str:
 
 def regular_file(path: Path) -> bool:
     return path.is_file() and not path.is_symlink()
+
+
+def _mask_gradle_non_code(build: str, *, mark: bool) -> str:
+    """Mask comments and multiline strings while preserving source offsets."""
+
+    def replacement(match: re.Match[str]) -> str:
+        marker_pending = mark
+        masked = []
+        for character in match.group():
+            if character in "\r\n":
+                masked.append(character)
+            elif marker_pending:
+                masked.append("#")
+                marker_pending = False
+            else:
+                masked.append(" ")
+        return "".join(masked)
+
+    return _GRADLE_NON_CODE.sub(replacement, build)
+
+
+def applies_shared_java_convention(build: str) -> bool:
+    """Return whether the canonical shared convention is applied."""
+
+    without_non_code = _mask_gradle_non_code(build, mark=False)
+    plugin_block = _LEADING_PLUGIN_BLOCK.match(without_non_code)
+    if plugin_block is None:
+        return False
+    guarded = _mask_gradle_non_code(build, mark=True)
+    start, end = plugin_block.span("body")
+    return _APPLIED_SHARED_JAVA_CONVENTION.search(guarded[start:end]) is not None
 
 
 def tracked_files(repository: Path, pattern: str) -> list[Path]:
@@ -176,19 +239,9 @@ def check_repository(repository: Path) -> dict[str, object]:
     build_path = repository / "build.gradle"
     if regular_file(build_path):
         build = read(build_path)
-        checks = (
-            (r"id\s+['\"]java-library['\"]", "java-library plugin is missing"),
-            (r"id\s+['\"]checkstyle['\"]", "checkstyle plugin is missing"),
-            (r"id\s+['\"]maven-publish['\"]", "maven-publish plugin is missing"),
-            (r"JavaLanguageVersion\.of\(21\)", "Java 21 toolchain is missing"),
-            (r"options\.release\s*=\s*21", "Java release 21 is missing"),
-            (r"options\.encoding\s*=\s*['\"]UTF-8['\"]", "UTF-8 compilation is missing"),
-            (r"-Xlint:all", "-Xlint:all compilation is missing"),
-            (r"-Werror", "-Werror compilation is missing"),
-            (r"toolVersion\s*=\s*['\"]10\.18\.2['\"]", "Checkstyle 10.18.2 is missing"),
-            (r"preserveFileTimestamps\s*=\s*false", "timestamp-free archives are missing"),
-            (r"reproducibleFileOrder\s*=\s*true", "reproducible archive order is missing"),
-        )
+        checks = CONSUMER_BUILD_CHECKS
+        if not applies_shared_java_convention(build):
+            checks += CONVENTION_OWNED_BUILD_CHECKS
         for pattern, message in checks:
             if not re.search(pattern, build):
                 findings.append(Finding("build.gradle", message))

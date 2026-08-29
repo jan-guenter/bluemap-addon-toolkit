@@ -23,6 +23,12 @@ PYTHONPATH=src python -m bluemap_addon_toolkit conventions check /path/to/addon
 An installed checkout exposes the same interface as
 `bluemap-addon-toolkit`.
 
+Release `0.3.0-alpha.1` makes the repository checker understand the exact
+applied Gradle convention shown below. The checker still requires
+`java-library`, `checkstyle`, and `maven-publish` in the consumer. Comments,
+other plugin IDs, declarations outside the leading `plugins` block, and
+`apply false` do not satisfy the convention-owned checks.
+
 ## Commands
 
 ```text
@@ -57,7 +63,7 @@ before they can become shared interfaces.
 
 ## Gradle convention development
 
-Release `0.2.0-alpha.1` adds a source-distributed convention plugin under
+Release `0.2.0-alpha.1` added a source-distributed convention plugin under
 `gradle/`. Consumers load it from an exact toolkit Git submodule with a
 consumer-owned trust preflight and `pluginManagement.includeBuild`, then
 apply:

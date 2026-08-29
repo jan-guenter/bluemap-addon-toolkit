@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "development-only",
-  "version": "0.2.0-alpha.1",
+  "version": "0.3.0-alpha.1",
   "plugin_id": "io.github.janguenter.bluemap-addon.java-conventions",
   "distribution": {
     "kind": "git-submodule-included-build",
