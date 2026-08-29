@@ -5,5 +5,5 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-gradle-plugin/.gradle/
-gradle-plugin/build/
+gradle/**/.gradle/
+gradle/**/build/

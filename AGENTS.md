@@ -32,8 +32,16 @@ Run:
 ```bash
 python -m unittest discover -s tests -v
 PYTHONPATH=src python -m bluemap_addon_toolkit --version
+python tools/verify_gradle_conventions.py --gradle /path/to/gradle-9.4.0/bin/gradle
+python tools/verify_gradle_conventions.py --gradle /path/to/gradle-9.6.1/bin/gradle
 git diff --check
 ```
+
+The Gradle convention is consumed from an exact Git checkout. It must remain
+build-only, must not apply consumer plugins, and must not add production/test
+dependencies, repositories, publication declarations, or files to consumer
+archives. Its intentional sources variant and Checkstyle tool selection need
+byte-parity gates in every adoption cohort.
 
 For a release, build the Python distributions twice, inspect their contents,
 test installation in a clean virtual environment, and confirm that the tag is

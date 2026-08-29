@@ -51,8 +51,30 @@ Tags describe releases for people. Exact commits and release hashes remain the
 automation trust boundary. See [adoption.md](docs/adoption.md) for the staged
 migration policy.
 
-The first release intentionally excludes Gradle plugins, reusable workflows,
-gallery schemas, and production Java. Those boundaries need artifact-parity
-pilots before they can become shared interfaces.
+The toolkit still excludes reusable workflows, gallery schemas, and
+production Java. Those boundaries need their own artifact-parity pilots
+before they can become shared interfaces.
+
+## Gradle convention development
+
+Release `0.2.0-alpha.1` adds a source-distributed convention plugin under
+`gradle/`. Consumers load it from an exact toolkit Git submodule with a
+consumer-owned trust preflight and `pluginManagement.includeBuild`, then
+apply:
+
+```groovy
+plugins {
+    id 'java-library'
+    id 'checkstyle'
+    id 'maven-publish'
+    id 'io.github.janguenter.bluemap-addon.java-conventions'
+}
+```
+
+The plugin owns only Java toolchain, compiler, archive reproducibility, test
+framework and conditional Checkstyle configuration. Consumer plugins,
+dependencies, repositories, coordinates, compression, packaging, provenance,
+gallery and release rules stay in each add-on. See
+[gradle-conventions.md](docs/gradle-conventions.md).
 
 The toolkit is licensed under the [MIT License](LICENSE).

@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: MIT
+
+plugins {
+    id 'io.github.janguenter.bluemap-addon.java-conventions'
+}
+
+def fixtureProject = project
+def fixturePluginManager = pluginManager
+def fixtureTasks = tasks
+def fixtureExtensions = extensions
+def fixtureRepositories = repositories
+
+tasks.register('verifyConventions') {
+    doLast {
+        assert fixtureProject.group.toString().isEmpty()
+        assert fixtureProject.version.toString() == 'unspecified'
+        assert !fixturePluginManager.hasPlugin('base')
+        assert !fixturePluginManager.hasPlugin('java')
+        assert !fixturePluginManager.hasPlugin('java-library')
+        assert !fixturePluginManager.hasPlugin('checkstyle')
+        assert !fixturePluginManager.hasPlugin('maven-publish')
+        assert fixtureTasks.findByName('jar') == null
+        assert fixtureTasks.findByName('test') == null
+        assert fixtureExtensions.findByName('checkstyle') == null
+        assert fixtureRepositories.isEmpty()
+    }
+}

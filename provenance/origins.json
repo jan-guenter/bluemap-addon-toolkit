@@ -36,6 +36,12 @@
         "tools/check_addon_conventions.py",
         "tools/migrate_addon_conventions.py"
       ]
+    },
+    {
+      "component": "Gradle Java convention plugin",
+      "method": "independent implementation of portfolio-wide invariant behavior",
+      "observed_repositories": 46,
+      "evidence": "provenance/gradle-conventions.json"
     }
   ]
 }
